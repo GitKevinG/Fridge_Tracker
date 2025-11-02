@@ -13,9 +13,19 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 
 load_dotenv()
 
-SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY')
 
-# Database helper functions
+
+
+# Create the Flask app
+app = Flask(__name__)
+app.secret_key = 'your-secret-key-here-change-in-production'
+
+# Get API key from environment variable (production) or hardcode (development)
+SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY', 'your-api-key-here')
+
+# Check if we're on Render (production) or local (development)
+DATABASE_URL = os.getenv('DATABASE_URL')
+
 if DATABASE_URL:
     # Production: Use PostgreSQL
     import psycopg2
@@ -30,6 +40,45 @@ else:
         conn = sqlite3.connect('fridge.db')
         conn.row_factory = sqlite3.Row
         return conn
+
+# Helper functions for database operations
+def execute_query(conn, query, params=None):
+    """Execute a SELECT query and return results"""
+    if DATABASE_URL:
+        # PostgreSQL
+        cursor = conn.cursor()
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        
+        # Get column names
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        
+        # Fetch results and convert to dict
+        results = []
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+        
+        cursor.close()
+        return results
+    else:
+        # SQLite
+        if params:
+            return conn.execute(query, params).fetchall()
+        else:
+            return conn.execute(query).fetchall()
+
+def execute_insert(conn, query, params):
+    """Execute an INSERT/UPDATE/DELETE query"""
+    if DATABASE_URL:
+        # PostgreSQL
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        cursor.close()
+    else:
+        # SQLite
+        conn.execute(query, params)
 
 def init_db():
     """Initialize the database with tables"""
@@ -93,7 +142,7 @@ def init_db():
     conn.close()
 
 def migrate_db():
-    """Add status column if it doesn't exist"""
+    """Add status, price, and store columns if they don't exist"""
     conn = get_db_connection()
     
     try:
@@ -187,289 +236,54 @@ def init_price_history_table():
     finally:
         conn.close()
 
-
-def search_recipes_by_ingredients(ingredients):
-    """
-    Search for recipes using Spoonacular API
-    ingredients: list of ingredient names ['chicken', 'tomato', 'cheese']
-    """
-    if not SPOONACULAR_API_KEY:
-        print("ERROR: No API key found!")
-        return []
-    
-    # Spoonacular API endpoint
-    url = "https://api.spoonacular.com/recipes/findByIngredients"
-    
-    # Convert list to comma-separated string
-    ingredients_str = ','.join(ingredients)
-    
-    # API parameters
-    params = {
-        'apiKey': SPOONACULAR_API_KEY,
-        'ingredients': ingredients_str,
-        'number': 12,  # Return 12 recipes
-        'ranking': 2,  # Maximize used ingredients
-        'ignorePantry': True  # Don't assume pantry staples
-    }
-    
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()  # Raise error for bad status codes
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API Error: {e}")
-        return []
-
-# Create the Flask app
-app = Flask(__name__)
-app.secret_key = 'secert-key'
-
 # Initialize the database when the app starts
 init_db()
 migrate_db()
 init_price_history_table()
 
+# Helper function to calculate days until expiration
+def calculate_days_left(expiration_date_str):
+    """Calculate days left until expiration"""
+    try:
+        expiration_date = datetime.strptime(expiration_date_str, '%Y-%m-%d').date()
+        today = date.today()
+        days_left = (expiration_date - today).days
+        return days_left
+    except:
+        return 999  # Default if date parsing fails
+
 @app.route('/')
 def home():
+    """Display all fridge items"""
     conn = get_db_connection()
     try:
-        # Get all items from database
-        items = conn.execute("SELECT * FROM fridge_items WHERE status = 'fridge' ORDER BY expiration").fetchall()
+        items = execute_query(conn, "SELECT * FROM fridge_items WHERE status = 'fridge' ORDER BY expiration")
         
-        # Calculate days left for each item
-        today = date.today()
+        # Add days_left calculation to each item
         items_with_days = []
-        
         for item in items:
             item_dict = dict(item)
-            expiration = datetime.strptime(item_dict['expiration'], '%Y-%m-%d').date()
-            days_until_expiration = (expiration - today).days
-            item_dict['days_left'] = days_until_expiration
+            item_dict['days_left'] = calculate_days_left(item_dict['expiration'])
             items_with_days.append(item_dict)
         
         return render_template('home.html', items=items_with_days)
     finally:
         conn.close()
 
-@app.route('/recipes')
-def recipes():
-    conn = get_db_connection()
-    try:
-        # Get all items from fridge
-        items = conn.execute(
-            "SELECT * FROM fridge_items WHERE status = 'fridge'"
-        ).fetchall()
-        
-        # Extract just the ingredient names
-        ingredients = [item['name'] for item in items]
-        
-        # If no items, show message
-        if not ingredients:
-            return render_template('recipes.html', 
-                                 recipes=[], 
-                                 ingredients=[], 
-                                 message="Your fridge is empty! Add some items first.")
-        
-        # Search for recipes
-        recipes = search_recipes_by_ingredients(ingredients)
-        
-        return render_template('recipes.html', 
-                             recipes=recipes, 
-                             ingredients=ingredients,
-                             message=None)
-    finally:
-        conn.close()
-
-@app.route('/add-missing-ingredients', methods=['POST'])
-def add_missing_ingredients():
-    """Add missing recipe ingredients to shopping list"""
-    ingredients = request.form.getlist('ingredients')
-    
-    conn = get_db_connection()
-    try:
-        added_count = 0
-        for ingredient in ingredients:
-            # Check if already in shopping list
-            existing = conn.execute(
-                "SELECT id FROM fridge_items WHERE name = ? AND status = 'shopping_list'",
-                (ingredient,)
-            ).fetchone()
-            
-            if not existing:
-                # Add to shopping list
-                conn.execute(
-                    '''INSERT INTO fridge_items 
-                       (name, quantity, category, expiration, location, status) 
-                       VALUES (?, 1, 'Other', date('now', '+7 days'), 'Fridge', 'shopping_list')''',
-                    (ingredient,)
-                )
-                added_count += 1
-        
-        conn.commit()
-        
-        if added_count > 0:
-            flash(f'Added {added_count} ingredient(s) to your shopping list!', 'success')
-        else:
-            flash('All ingredients already in shopping list!', 'info')
-        
-    finally:
-        conn.close()
-    
-    return redirect(url_for('recipes'))
-
-@app.route('/about')
-def about():
-    return render_template('about.html')
-
-@app.route('/shopping-list')
-def shopping_list():
-    conn = get_db_connection()
-    try:
-        # Get all items with status 'shopping_list'
-        items = conn.execute(
-            "SELECT * FROM fridge_items WHERE status = 'shopping_list' ORDER BY name"
-        ).fetchall()
-        
-        # Convert to list of dicts
-        items_list = [dict(item) for item in items]
-        
-        return render_template('shopping_list.html', items=items_list)
-    finally:
-        conn.close()
-
-@app.route('/mark-purchased/<int:item_id>', methods=['POST'])
-def mark_purchased(item_id):
-    from datetime import timedelta
-    
-    conn = get_db_connection()
-    try:
-        # Calculate new expiration date (7 days from now)
-        new_expiration = date.today() + timedelta(days=7)
-        
-        # Update item: move back to fridge with new expiration
-        conn.execute(
-            "UPDATE fridge_items SET status = 'fridge', expiration = ? WHERE id = ?",
-            (new_expiration.strftime('%Y-%m-%d'), item_id)
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    
-    return redirect(url_for('shopping_list'))
-
-
-@app.route('/delete/<int:item_id>', methods=['POST'])
-def delete_item(item_id):
-    conn = get_db_connection()
-    try:
-        # Delete the item with this ID
-        conn.execute('DELETE FROM fridge_items WHERE id = ?', (item_id,))
-        conn.commit()
-    finally:
-        conn.close()
-
-    referrer = request.referrer
-    if referrer and 'shopping-list' in referrer:
-        return redirect(url_for('shopping_list'))
-    else:
-        return redirect(url_for('home'))
-
-
-@app.route('/move-to-shopping/<int:item_id>', methods=['POST'])
-def move_to_shopping_list(item_id):
-    conn = get_db_connection()
-    try:
-        # Update the item's status to 'shopping_list'
-        conn.execute(
-            "UPDATE fridge_items SET status = 'shopping_list' WHERE id = ?",
-            (item_id,)
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    
-    return redirect(url_for('home'))
-
-@app.route('/price-history')
-def price_history():
-    """Show price history and trends"""
-    conn = get_db_connection()
-    try:
-        # Get all price history, most recent first
-        history = conn.execute(
-            '''SELECT item_name, store, price, date_recorded 
-               FROM price_history 
-               ORDER BY date_recorded DESC'''
-        ).fetchall()
-        
-        # Get unique items that have price history
-        items_with_history = conn.execute(
-            '''SELECT DISTINCT item_name, store 
-               FROM price_history 
-               ORDER BY item_name'''
-        ).fetchall()
-        
-        # Calculate average prices per item per store
-        averages = {}
-        for item_store in items_with_history:
-            item_name = item_store['item_name']
-            store = item_store['store']
-            
-            # Get all prices for this item at this store
-            prices = conn.execute(
-                '''SELECT price, date_recorded 
-                   FROM price_history 
-                   WHERE item_name = ? AND store = ?
-                   ORDER BY date_recorded DESC''',
-                (item_name, store)
-            ).fetchall()
-            
-            if prices:
-                price_list = [p['price'] for p in prices]
-                avg_price = sum(price_list) / len(price_list)
-                min_price = min(price_list)
-                max_price = max(price_list)
-                latest_price = price_list[0]
-                
-                # Calculate trend (comparing latest to average)
-                if latest_price > avg_price * 1.05:  # More than 5% above average
-                    trend = 'up'
-                elif latest_price < avg_price * 0.95:  # More than 5% below average
-                    trend = 'down'
-                else:
-                    trend = 'stable'
-                
-                key = f"{item_name}|{store}"
-                averages[key] = {
-                    'item_name': item_name,
-                    'store': store,
-                    'average': avg_price,
-                    'latest': latest_price,
-                    'min': min_price,
-                    'max': max_price,
-                    'count': len(prices),
-                    'trend': trend,
-                    'prices': prices
-                }
-        
-        return render_template('price_history.html', 
-                             history=history, 
-                             averages=averages)
-    finally:
-        conn.close()
-
-
 @app.route('/add', methods=['POST'])
 def add_item():
-    # Get data from the form
+    """Add a new item to the fridge"""
     item_name = request.form.get('item_name')
     quantity = request.form.get('quantity')
     category = request.form.get('category')
     expiration_date = request.form.get('expiration_date')
     location = request.form.get('location')
+    
+    # Get price and store
     price = request.form.get('price')
     store = request.form.get('store')
-
+    
+    # Convert price to float if provided
     if price and price.strip():
         try:
             price = float(price)
@@ -477,30 +291,101 @@ def add_item():
             price = None
     else:
         price = None
-
+    
+    # If store is empty, set to None
     if not store or store.strip() == '':
         store = None
     
     conn = get_db_connection()
     try:
-        # Insert the new item
-        conn.execute(
-            'INSERT INTO fridge_items (name, quantity, category, expiration, location, status, price, store) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        execute_insert(conn, 
+            '''INSERT INTO fridge_items 
+               (name, quantity, category, expiration, location, status, price, store) 
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''' if DATABASE_URL else
+            '''INSERT INTO fridge_items 
+               (name, quantity, category, expiration, location, status, price, store) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
             (item_name, quantity, category, expiration_date, location, 'fridge', price, store)
         )
-
+        
+        # If item has a price, log it in price history
         if price is not None and item_name and store:
-            conn.execute(
+            execute_insert(conn,
+                '''INSERT INTO price_history (item_name, store, price, date_recorded)
+                   VALUES (%s, %s, %s, %s)''' if DATABASE_URL else
                 '''INSERT INTO price_history (item_name, store, price, date_recorded)
                    VALUES (?, ?, ?, ?)''',
                 (item_name, store, price, date.today().strftime('%Y-%m-%d'))
             )
-
+        
         conn.commit()
     finally:
         conn.close()
     
     return redirect(url_for('home'))
+
+@app.route('/delete/<int:item_id>', methods=['POST'])
+def delete_item(item_id):
+    """Delete an item from the fridge"""
+    conn = get_db_connection()
+    try:
+        execute_insert(conn, 
+            'DELETE FROM fridge_items WHERE id = %s' if DATABASE_URL else 'DELETE FROM fridge_items WHERE id = ?',
+            (item_id,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    
+    # Redirect back to where they came from
+    referrer = request.referrer
+    if referrer and 'shopping-list' in referrer:
+        return redirect(url_for('shopping_list'))
+    else:
+        return redirect(url_for('home'))
+
+@app.route('/move-to-shopping/<int:item_id>', methods=['POST'])
+def move_to_shopping_list(item_id):
+    """Move an item to the shopping list"""
+    conn = get_db_connection()
+    try:
+        execute_insert(conn,
+            "UPDATE fridge_items SET status = %s WHERE id = %s" if DATABASE_URL else
+            "UPDATE fridge_items SET status = ? WHERE id = ?",
+            ('shopping_list', item_id)
+        )
+        conn.commit()
+        flash('Item moved to shopping list!', 'success')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('home'))
+
+@app.route('/shopping-list')
+def shopping_list():
+    """Display shopping list"""
+    conn = get_db_connection()
+    try:
+        items = execute_query(conn, "SELECT * FROM fridge_items WHERE status = 'shopping_list'")
+        return render_template('shopping_list.html', items=items)
+    finally:
+        conn.close()
+
+@app.route('/mark-purchased/<int:item_id>', methods=['POST'])
+def mark_purchased(item_id):
+    """Mark an item as purchased and remove from shopping list"""
+    conn = get_db_connection()
+    try:
+        execute_insert(conn,
+            'DELETE FROM fridge_items WHERE id = %s' if DATABASE_URL else 'DELETE FROM fridge_items WHERE id = ?',
+            (item_id,)
+        )
+        conn.commit()
+        flash('Item marked as purchased!', 'success')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('shopping_list'))
 
 @app.route('/edit/<int:item_id>', methods=['GET', 'POST'])
 def edit_item(item_id):
@@ -508,7 +393,6 @@ def edit_item(item_id):
     conn = get_db_connection()
     
     if request.method == 'POST':
-        # Get updated data from form
         item_name = request.form.get('item_name')
         quantity = request.form.get('quantity')
         category = request.form.get('category')
@@ -532,13 +416,21 @@ def edit_item(item_id):
         
         try:
             # Get old item data to check if price changed
-            old_item = conn.execute(
+            old_item = execute_query(conn,
+                'SELECT price, store, name FROM fridge_items WHERE id = %s' if DATABASE_URL else
                 'SELECT price, store, name FROM fridge_items WHERE id = ?',
                 (item_id,)
-            ).fetchone()
+            )
+            
+            if old_item:
+                old_item = old_item[0]
             
             # Update the item
-            conn.execute(
+            execute_insert(conn,
+                '''UPDATE fridge_items 
+                   SET name = %s, quantity = %s, category = %s, expiration = %s, 
+                       location = %s, price = %s, store = %s
+                   WHERE id = %s''' if DATABASE_URL else
                 '''UPDATE fridge_items 
                    SET name = ?, quantity = ?, category = ?, expiration = ?, 
                        location = ?, price = ?, store = ?
@@ -547,9 +439,11 @@ def edit_item(item_id):
             )
             
             # If price changed and exists, log new price in history
-            if price is not None and store and item_name:
-                if old_item['price'] != price:  # Price changed
-                    conn.execute(
+            if price is not None and store and item_name and old_item:
+                if old_item['price'] != price:
+                    execute_insert(conn,
+                        '''INSERT INTO price_history (item_name, store, price, date_recorded)
+                           VALUES (%s, %s, %s, %s)''' if DATABASE_URL else
                         '''INSERT INTO price_history (item_name, store, price, date_recorded)
                            VALUES (?, ?, ?, ?)''',
                         (item_name, store, price, date.today().strftime('%Y-%m-%d'))
@@ -569,11 +463,14 @@ def edit_item(item_id):
     
     # GET request - show edit form
     try:
-        item = conn.execute('SELECT * FROM fridge_items WHERE id = ?', (item_id,)).fetchone()
-        if item is None:
+        item = execute_query(conn, 
+            'SELECT * FROM fridge_items WHERE id = %s' if DATABASE_URL else 'SELECT * FROM fridge_items WHERE id = ?',
+            (item_id,)
+        )
+        if not item:
             flash('Item not found!', 'error')
             return redirect(url_for('home'))
-        return render_template('edit_item.html', item=item)
+        return render_template('edit_item.html', item=item[0])
     finally:
         conn.close()
 
@@ -581,19 +478,15 @@ def edit_item(item_id):
 def bulk_add():
     """Add multiple items at once"""
     if request.method == 'POST':
-        # Get the number of items being submitted
         item_count = int(request.form.get('item_count', 0))
         
         conn = get_db_connection()
         try:
             items_added = 0
             
-            # Loop through each item in the form
             for i in range(item_count):
-                # Get data for this item (fields are named like item_name_0, item_name_1, etc.)
                 item_name = request.form.get(f'item_name_{i}', '').strip()
                 
-                # Skip empty rows
                 if not item_name:
                     continue
                 
@@ -618,7 +511,10 @@ def bulk_add():
                     store = None
                 
                 # Insert the item
-                conn.execute(
+                execute_insert(conn,
+                    '''INSERT INTO fridge_items 
+                       (name, quantity, category, expiration, location, status, price, store) 
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''' if DATABASE_URL else
                     '''INSERT INTO fridge_items 
                        (name, quantity, category, expiration, location, status, price, store) 
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -627,7 +523,9 @@ def bulk_add():
                 
                 # Log price history if price exists
                 if price is not None and item_name and store:
-                    conn.execute(
+                    execute_insert(conn,
+                        '''INSERT INTO price_history (item_name, store, price, date_recorded)
+                           VALUES (%s, %s, %s, %s)''' if DATABASE_URL else
                         '''INSERT INTO price_history (item_name, store, price, date_recorded)
                            VALUES (?, ?, ?, ?)''',
                         (item_name, store, price, date.today().strftime('%Y-%m-%d'))
@@ -643,12 +541,169 @@ def bulk_add():
             conn.close()
     
     # GET request - show the form
-    # Calculate default expiration (7 days from now)
-    from datetime import datetime, timedelta
     default_expiration = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
-    
     return render_template('bulk_add.html', default_expiration=default_expiration)
 
+@app.route('/price-history')
+def price_history():
+    """Show price history and trends"""
+    conn = get_db_connection()
+    try:
+        # Get all price history, most recent first
+        history = execute_query(conn,
+            '''SELECT item_name, store, price, date_recorded 
+               FROM price_history 
+               ORDER BY date_recorded DESC'''
+        )
+        
+        # Get unique items that have price history
+        items_with_history = execute_query(conn,
+            '''SELECT DISTINCT item_name, store 
+               FROM price_history 
+               ORDER BY item_name'''
+        )
+        
+        # Calculate average prices per item per store
+        averages = {}
+        for item_store in items_with_history:
+            item_name = item_store['item_name']
+            store = item_store['store']
+            
+            # Get all prices for this item at this store
+            prices = execute_query(conn,
+                '''SELECT price, date_recorded 
+                   FROM price_history 
+                   WHERE item_name = %s AND store = %s
+                   ORDER BY date_recorded DESC''' if DATABASE_URL else
+                '''SELECT price, date_recorded 
+                   FROM price_history 
+                   WHERE item_name = ? AND store = ?
+                   ORDER BY date_recorded DESC''',
+                (item_name, store)
+            )
+            
+            if prices:
+                price_list = [p['price'] for p in prices]
+                avg_price = sum(price_list) / len(price_list)
+                min_price = min(price_list)
+                max_price = max(price_list)
+                latest_price = price_list[0]
+                
+                # Calculate trend
+                if latest_price > avg_price * 1.05:
+                    trend = 'up'
+                elif latest_price < avg_price * 0.95:
+                    trend = 'down'
+                else:
+                    trend = 'stable'
+                
+                key = f"{item_name}|{store}"
+                averages[key] = {
+                    'item_name': item_name,
+                    'store': store,
+                    'average': avg_price,
+                    'latest': latest_price,
+                    'min': min_price,
+                    'max': max_price,
+                    'count': len(prices),
+                    'trend': trend,
+                    'prices': prices
+                }
+        
+        return render_template('price_history.html', 
+                             history=history, 
+                             averages=averages)
+    finally:
+        conn.close()
+
+# Recipe helper function
+def get_recipes(ingredients, number=12):
+    """Get recipe suggestions from Spoonacular API"""
+    if not ingredients:
+        return []
+    
+    url = 'https://api.spoonacular.com/recipes/findByIngredients'
+    params = {
+        'ingredients': ','.join(ingredients),
+        'number': number,
+        'ranking': 2,
+        'ignorePantry': True,
+        'apiKey': SPOONACULAR_API_KEY
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return []
+    except:
+        return []
+
+@app.route('/recipes')
+def recipes():
+    """Show recipe suggestions based on fridge items"""
+    conn = get_db_connection()
+    try:
+        items = execute_query(conn, "SELECT * FROM fridge_items WHERE status = 'fridge'")
+        
+        # Get ingredient names
+        ingredients = [item['name'] for item in items]
+        
+        # Get recipe suggestions
+        recipes_data = get_recipes(ingredients, number=12)
+        
+        return render_template('recipes.html', 
+                             recipes=recipes_data, 
+                             ingredients=ingredients)
+    finally:
+        conn.close()
+
+@app.route('/add-missing-ingredients', methods=['POST'])
+def add_missing_ingredients():
+    """Add missing recipe ingredients to shopping list"""
+    ingredients = request.form.getlist('ingredients')
+    
+    conn = get_db_connection()
+    try:
+        added_count = 0
+        for ingredient in ingredients:
+            # Check if already in shopping list
+            existing = execute_query(conn,
+                "SELECT id FROM fridge_items WHERE name = %s AND status = 'shopping_list'" if DATABASE_URL else
+                "SELECT id FROM fridge_items WHERE name = ? AND status = 'shopping_list'",
+                (ingredient,)
+            )
+            
+            if not existing:
+                # Add to shopping list
+                execute_insert(conn,
+                    '''INSERT INTO fridge_items 
+                       (name, quantity, category, expiration, location, status) 
+                       VALUES (%s, 1, 'Other', %s, 'Fridge', 'shopping_list')''' if DATABASE_URL else
+                    '''INSERT INTO fridge_items 
+                       (name, quantity, category, expiration, location, status) 
+                       VALUES (?, 1, 'Other', date('now', '+7 days'), 'Fridge', 'shopping_list')''',
+                    (ingredient, (date.today() + timedelta(days=7)).strftime('%Y-%m-%d')) if DATABASE_URL else (ingredient,)
+                )
+                added_count += 1
+        
+        conn.commit()
+        
+        if added_count > 0:
+            flash(f'Added {added_count} ingredient(s) to your shopping list!', 'success')
+        else:
+            flash('All ingredients already in shopping list!', 'info')
+        
+    finally:
+        conn.close()
+    
+    return redirect(url_for('recipes'))
+
+@app.route('/about')
+def about():
+    """About page"""
+    return render_template('about.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
