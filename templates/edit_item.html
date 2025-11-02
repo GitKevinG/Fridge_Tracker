@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Page Title - Fridge Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>✏️ Edit Item</h1>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="item_name">Item Name:</label>
+                <input type="text" id="item_name" name="item_name" value="{{ item.name }}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="quantity">Quantity:</label>
+                <input type="number" id="quantity" name="quantity" value="{{ item.quantity }}" min="1" required>
+            </div>
+
+            <div class="form-group">
+                <label for="category">Category:</label>
+                <select id="category" name="category" required>
+                    <option value="Fruit" {% if item.category == 'Fruit' %}selected{% endif %}>Fruit</option>
+                    <option value="Vegetable" {% if item.category == 'Vegetable' %}selected{% endif %}>Vegetable</option>
+                    <option value="Dairy" {% if item.category == 'Dairy' %}selected{% endif %}>Dairy</option>
+                    <option value="Meat" {% if item.category == 'Meat' %}selected{% endif %}>Meat</option>
+                    <option value="Other" {% if item.category == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="expiration_date">Expiration Date:</label>
+                <input type="date" id="expiration_date" name="expiration_date" value="{{ item.expiration }}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="location">Location:</label>
+                <select id="location" name="location" required>
+                    <option value="Fridge" {% if item.location == 'Fridge' %}selected{% endif %}>Fridge</option>
+                    <option value="Freezer" {% if item.location == 'Freezer' %}selected{% endif %}>Freezer</option>
+                    <option value="Pantry" {% if item.location == 'Pantry' %}selected{% endif %}>Pantry</option>
+                    <option value="Bathroom" {% if item.location == 'Bathroom' %}selected{% endif %}>Bathroom</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="store">Store (optional):</label>
+                <select id="store" name="store">
+                    <option value="" {% if not item.store %}selected{% endif %}>Not specified</option>
+                    <option value="Giant" {% if item.store == 'Giant' %}selected{% endif %}>Giant (DoorDash)</option>
+                    <option value="Aldi" {% if item.store == 'Aldi' %}selected{% endif %}>Aldi (DoorDash)</option>
+                    <option value="Walmart" {% if item.store == 'Walmart' %}selected{% endif %}>Walmart</option>
+                    <option value="Target" {% if item.store == 'Target' %}selected{% endif %}>Target</option>
+                    <option value="Other" {% if item.store == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="price">Price (optional):</label>
+                <input type="number" step="0.01" id="price" name="price" value="{{ item.price if item.price else '' }}" placeholder="4.99">
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="save-btn">💾 Save Changes</button>
+                <a href="{{ url_for('home') }}" style="flex: 1; text-decoration: none;">
+                    <button type="button" class="cancel-btn" style="width: 100%;">❌ Cancel</button>
+                </a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

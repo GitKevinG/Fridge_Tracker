@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title> 📊 Price History & Trends - Fridge Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="nav-bar">
+            <a href="{{ url_for('home') }}" class="nav-link">🍎 Fridge</a>
+            <a href="{{ url_for('shopping_list') }}" class="nav-link">🛒 Shopping List</a>
+            <a href="{{ url_for('recipes') }}" class="nav-link">🍳 Recipes</a>
+            <a href="{{ url_for('price_history') }}" class="nav-link">📊 Price History</a>
+            <a href="{{ url_for('bulk_add') }}" class="nav-link">➕ Bulk Add</a>
+            <a href="{{ url_for('about') }}" class="nav-link">ℹ️ About</a>
+        </div>
+
+        <h1>📊 Price History & Trends</h1>
+
+        {% if averages %}
+            <p style="color: whitesmoke; margin-bottom: 20px; font-size: 14px;">
+                Tracking prices for {{ averages|length }} item(s) across different stores
+            </p>
+
+            <!-- Price Summary Cards -->
+            {% for key, data in averages.items() %}
+            <div class="price-card trend-{{ data.trend }}">
+                <!-- Single row layout -->
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <!-- Left: Item name and store -->
+                    <div style="flex: 0 0 200px;">
+                        <div style="font-weight: bold; font-size: 16px;">{{ data.item_name }}</div>
+                        <div style="font-size: 14px; color: black;">🏪 {{ data.store }}</div>
+                    </div>
+                    
+                    <!-- Middle: Stats in a row -->
+                    <div style="display: flex; gap: 15px; flex: 1; justify-content: center;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color:whitesmoke;">Latest</div>
+                            <div style="font-size: 14px; font-weight: bold; color: #2196F3;">${{ "%.2f"|format(data.latest) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: whitesmoke;">Avg</div>
+                            <div style="font-size: 14px; font-weight: bold;">${{ "%.2f"|format(data.average) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: whitesmoke;">Low</div>
+                            <div style="font-size: 14px; font-weight: bold; color: #4CAF50;">${{ "%.2f"|format(data.min) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: whitesmoke;">High</div>
+                            <div style="font-size: 14px; font-weight: bold; color: #f44336;">${{ "%.2f"|format(data.max) }}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Trend -->
+                    <div style="text-align: right; flex: 0 0 100px;">
+                        {% if data.trend == 'up' %}
+                            <span style="font-size: 18px;">📈</span>
+                            <div style="color: #f44336; font-size: 11px; font-weight: bold;">Rising</div>
+                        {% elif data.trend == 'down' %}
+                            <span style="font-size: 18px;">📉</span>
+                            <div style="color: #4CAF50; font-size: 11px; font-weight: bold;">Falling</div>
+                        {% else %}
+                            <span style="font-size: 18px;">➡️</span>
+                            <div style="color: #2196F3; font-size: 11px; font-weight: bold;">Stable</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Far right: Expand details -->
+                    <details style="flex: 0 0 auto; margin-left: 10px;">
+                        <summary style="cursor: pointer; color: #2196F3; font-size: 12px; list-style: none;">▼</summary>
+                        <div style="position: absolute; right: 30px; margin-top: 5px; background: white; border: 1px solid #ddd; border-radius: 5px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10; min-width: 300px;">
+                            <div style="font-weight: bold; margin-bottom: 10px;">{{ data.count }} Price Record(s)</div>
+                            <table class="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Price</th>
+                                        <th>Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for price in data.prices %}
+                                    <tr>
+                                        <td>{{ price.date_recorded }}</td>
+                                        <td>${{ "%.2f"|format(price.price) }}</td>
+                                        <td>
+                                            {% if loop.index < data.prices|length %}
+                                                {% set prev_price = data.prices[loop.index].price %}
+                                                {% set change = price.price - prev_price %}
+                                                {% if change > 0 %}
+                                                    <span style="color: #f44336;">+${{ "%.2f"|format(change) }}</span>
+                                                {% elif change < 0 %}
+                                                    <span style="color: #4CAF50;">-${{ "%.2f"|format(change|abs) }}</span>
+                                                {% else %}
+                                                    <span style="color: #666;">--</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span style="color: #666;">--</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                </div>
+            </div>
+            {% endfor %}
+
+        {% else %}
+            <div style="text-align: center; padding: 60px 20px; color: #999;">
+                <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
+                <h2 style="color: #666;">No Price History Yet</h2>
+                <p>Start adding items with prices to see trends and analytics!</p>
+                <a href="{{ url_for('home') }}" style="color: #4CAF50; text-decoration: none; font-weight: bold;">
+                    → Add Your First Item
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

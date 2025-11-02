@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🍎 Fridge Tracker - Fridge Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+
+        <div class="nav-bar">
+            <a href="{{ url_for('home') }}" class="nav-link">🍎 Fridge</a>
+            <a href="{{ url_for('shopping_list') }}" class="nav-link">🛒 Shopping List</a>
+            <a href="{{ url_for('about') }}" class="nav-link">ℹ️ About</a>
+            <a href="{{ url_for('recipes') }}" class="nav-link">🍳 Recipes</a>
+                <a href="{{ url_for('bulk_add') }}" class="nav-link">➕ Bulk Add</a>
+            <a href="{{ url_for('price_history') }}" class="nav-link">📊 Price History</a>
+        </div>
+
+        <h1>🍎 Fridge Tracker</h1>
+        <div style="margin-bottom: 20px;">
+            <a href="{{ url_for('shopping_list') }}" style="color: #2196F3; text-decoration: none; font-size: 16px;">
+                🛒 View Shopping List
+            </a>
+        </div>
+        <p>Keep track of what's in your fridge and when it expires!</p>
+
+
+        <div style="margin-bottom: 30px;">
+            <a href="{{ url_for('recipes') }}" 
+            style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; 
+                    font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;">
+                🍳 Find Recipes with My Ingredients
+            </a>
+        </div>
+
+
+                <!-- Expiring Soon Section -->
+        {% set expiring_soon = items|selectattr('days_left', 'le', 3)|list %}
+
+        {% if expiring_soon %}
+        <div style="background-color: wheat; border-left: 4px solid #764ba2; padding: 15px; border-radius: 5px; margin-bottom: 30px;">
+            
+            <details>
+                <summary style="cursor: pointer; font-weight: bold; font-size: 16px; color: #e65100;">
+                    ⚠️ {{ expiring_soon|length }} items expiring soon - Click to view
+                </summary>
+                
+                <div style="margin-top: 15px;">
+                    {% for item in expiring_soon %}
+                    <div style="background-color: white; padding: 10px; margin-bottom: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                        
+                        <div>
+                            <strong>{{ item.name }}</strong> (Qty: {{ item.quantity }})
+                            <br>
+                            <small style="color: #e65100;">
+                                {% if item.days_left < 0 %}
+                                    🔴 EXPIRED {{ item.days_left|abs }} days ago!
+                                {% elif item.days_left == 0 %}
+                                    🔴 Expires TODAY!
+                                {% else %}
+                                    ⏰ Expires in {{ item.days_left }} days
+                                {% endif %}
+                            </small>
+                        </div>
+                        
+                        <div style="white-space: nowrap;">
+                            <form method="POST" action="{{ url_for('move_to_shopping_list', item_id=item.id) }}" style="display: inline;">
+                                <button type="submit" style="background-color: #2196F3; padding: 5px 10px; border: none; border-radius: 4px; color: white; cursor: pointer; margin-right: 5px; font-size: 12px;">
+                                    🛒 Shopping List
+                                </button>
+                            </form>
+                            
+                            <form method="POST" action="{{ url_for('delete_item', item_id=item.id) }}" style="display: inline;">
+                                <button type="submit" style="background-color: #f44336; padding: 5px 10px; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">
+                                    🗑️ Delete
+                                </button>
+                            </form>
+                        </div>
+                        
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            
+        </div>
+        {% endif %}
+   <!-- Current Items Section -->
+        <div class="glass-card">
+    <h2 style="color: white; margin-bottom: 20px;">Current Items ({{ items|length }})</h2>
+    
+    {% if items %}
+        <!-- Group items by location -->
+        {% set fridge_items = items|selectattr('location', 'eq', 'Fridge')|list %}
+        {% set freezer_items = items|selectattr('location', 'eq', 'Freezer')|list %}
+        {% set pantry_items = items|selectattr('location', 'eq', 'Pantry')|list %}
+        {% set bathroom_items = items|selectattr('location', 'eq', 'Bathroom')|list %}
+        
+        <!-- Freezer Section -->
+        {% if freezer_items %}
+        <details open style="margin-bottom: 20px;">
+            <summary style="cursor: pointer; padding: 15px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; color: white; font-size: 18px; font-weight: bold; user-select: none; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);">
+                🧊 Freezer ({{ freezer_items|length }} items)
+            </summary>
+            <div style="margin-top: 15px;">
+                {% for item in freezer_items %}
+                <div class="item {% if item.days_left <= 0 %}item-danger{% elif item.days_left <= 3 %}item-warning{% endif %}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <strong>{{ item.name }}</strong> (Qty: {{ item.quantity }})
+                            <span style="color: rgba(255, 255, 255, 0.8);">({{ item.category }})</span>
+                        </div>
+                        
+                        <div style="white-space: nowrap; display: flex; gap: 5px;">
+                            <a href="{{ url_for('edit_item', item_id=item.id) }}" style="text-decoration: none;">
+                                <button type="button" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    ✏️ Edit
+                                </button>
+                            </a>
+                            
+                            <form method="POST" action="{{ url_for('move_to_shopping_list', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🛒 Shopping List
+                                </button>
+                            </form>
+                            
+                            <form method="POST" action="{{ url_for('delete_item', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(244, 67, 54, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🗑️ Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <small style="color: rgba(255, 255, 255, 0.9);">
+                        📅 Expires: {{ item.expiration }} |
+                        ⏰ Days left: {{ item.days_left }}
+                        
+                        {% if item.price %}
+                            | 💰 ${{ "%.2f"|format(item.price) }}
+                        {% endif %}
+                        
+                        {% if item.store %}
+                            | 🏪 {{ item.store }}
+                        {% endif %}
+                        
+                        {% if item.days_left < 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRED {{ item.days_left|abs }} days ago!</span>
+                        {% elif item.days_left == 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRES TODAY!</span>
+                        {% elif item.days_left <= 3 %}
+                            <span style="color: #ffe082; font-weight: bold; margin-left: 10px;">⚠️ Expires in {{ item.days_left }} days</span>
+                        {% else %}
+                            <span style="color: #c8e6c9; margin-left: 10px;">✓ {{ item.days_left }} days left</span>
+                        {% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+        
+        <!-- Fridge Section -->
+        {% if fridge_items %}
+        <details open style="margin-bottom: 20px;">
+            <summary style="cursor: pointer; padding: 15px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; color: white; font-size: 18px; font-weight: bold; user-select: none; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);">
+                🥶 Fridge ({{ fridge_items|length }} items)
+            </summary>
+            <div style="margin-top: 15px;">
+                {% for item in fridge_items %}
+                <div class="item {% if item.days_left <= 0 %}item-danger{% elif item.days_left <= 3 %}item-warning{% endif %}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <strong>{{ item.name }}</strong> (Qty: {{ item.quantity }})
+                            <span style="color: rgba(255, 255, 255, 0.8);">({{ item.category }})</span>
+                        </div>
+                        
+                        <div style="white-space: nowrap; display: flex; gap: 5px;">
+                            <a href="{{ url_for('edit_item', item_id=item.id) }}" style="text-decoration: none;">
+                                <button type="button" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    ✏️ Edit
+                                </button>
+                            </a>
+                            
+                            <form method="POST" action="{{ url_for('move_to_shopping_list', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🛒 Shopping List
+                                </button>
+                            </form>
+                            
+                            <form method="POST" action="{{ url_for('delete_item', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(244, 67, 54, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🗑️ Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <small style="color: rgba(255, 255, 255, 0.9);">
+                        📅 Expires: {{ item.expiration }} |
+                        ⏰ Days left: {{ item.days_left }}
+                        
+                        {% if item.price %}
+                            | 💰 ${{ "%.2f"|format(item.price) }}
+                        {% endif %}
+                        
+                        {% if item.store %}
+                            | 🏪 {{ item.store }}
+                        {% endif %}
+                        
+                        {% if item.days_left < 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRED {{ item.days_left|abs }} days ago!</span>
+                        {% elif item.days_left == 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRES TODAY!</span>
+                        {% elif item.days_left <= 3 %}
+                            <span style="color: #ffe082; font-weight: bold; margin-left: 10px;">⚠️ Expires in {{ item.days_left }} days</span>
+                        {% else %}
+                            <span style="color: #c8e6c9; margin-left: 10px;">✓ {{ item.days_left }} days left</span>
+                        {% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+        
+        <!-- Pantry Section -->
+        {% if pantry_items %}
+        <details open style="margin-bottom: 20px;">
+            <summary style="cursor: pointer; padding: 15px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; color: white; font-size: 18px; font-weight: bold; user-select: none; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);">
+                🏺 Pantry ({{ pantry_items|length }} items)
+            </summary>
+            <div style="margin-top: 15px;">
+                {% for item in pantry_items %}
+                <div class="item {% if item.days_left <= 0 %}item-danger{% elif item.days_left <= 3 %}item-warning{% endif %}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <strong>{{ item.name }}</strong> (Qty: {{ item.quantity }})
+                            <span style="color: rgba(255, 255, 255, 0.8);">({{ item.category }})</span>
+                        </div>
+                        
+                        <div style="white-space: nowrap; display: flex; gap: 5px;">
+                            <a href="{{ url_for('edit_item', item_id=item.id) }}" style="text-decoration: none;">
+                                <button type="button" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    ✏️ Edit
+                                </button>
+                            </a>
+                            
+                            <form method="POST" action="{{ url_for('move_to_shopping_list', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🛒 Shopping List
+                                </button>
+                            </form>
+                            
+                            <form method="POST" action="{{ url_for('delete_item', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(244, 67, 54, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🗑️ Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <small style="color: rgba(255, 255, 255, 0.9);">
+                        📅 Expires: {{ item.expiration }} |
+                        ⏰ Days left: {{ item.days_left }}
+                        
+                        {% if item.price %}
+                            | 💰 ${{ "%.2f"|format(item.price) }}
+                        {% endif %}
+                        
+                        {% if item.store %}
+                            | 🏪 {{ item.store }}
+                        {% endif %}
+                        
+                        {% if item.days_left < 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRED {{ item.days_left|abs }} days ago!</span>
+                        {% elif item.days_left == 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRES TODAY!</span>
+                        {% elif item.days_left <= 3 %}
+                            <span style="color: #ffe082; font-weight: bold; margin-left: 10px;">⚠️ Expires in {{ item.days_left }} days</span>
+                        {% else %}
+                            <span style="color: #c8e6c9; margin-left: 10px;">✓ {{ item.days_left }} days left</span>
+                        {% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+        
+        <!-- Bathroom Section -->
+        {% if bathroom_items %}
+        <details open style="margin-bottom: 20px;">
+            <summary style="cursor: pointer; padding: 15px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; color: white; font-size: 18px; font-weight: bold; user-select: none; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);">
+                🚿 Bathroom ({{ bathroom_items|length }} items)
+            </summary>
+            <div style="margin-top: 15px;">
+                {% for item in bathroom_items %}
+                <div class="item {% if item.days_left <= 0 %}item-danger{% elif item.days_left <= 3 %}item-warning{% endif %}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <strong>{{ item.name }}</strong> (Qty: {{ item.quantity }})
+                            <span style="color: rgba(255, 255, 255, 0.8);">({{ item.category }})</span>
+                        </div>
+                        
+                        <div style="white-space: nowrap; display: flex; gap: 5px;">
+                            <a href="{{ url_for('edit_item', item_id=item.id) }}" style="text-decoration: none;">
+                                <button type="button" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    ✏️ Edit
+                                </button>
+                            </a>
+                            
+                            <form method="POST" action="{{ url_for('move_to_shopping_list', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🛒 Shopping List
+                                </button>
+                            </form>
+                            
+                            <form method="POST" action="{{ url_for('delete_item', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(244, 67, 54, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🗑️ Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <small style="color: rgba(255, 255, 255, 0.9);">
+                        📅 Expires: {{ item.expiration }} |
+                        ⏰ Days left: {{ item.days_left }}
+                        
+                        {% if item.price %}
+                            | 💰 ${{ "%.2f"|format(item.price) }}
+                        {% endif %}
+                        
+                        {% if item.store %}
+                            | 🏪 {{ item.store }}
+                        {% endif %}
+                        
+                        {% if item.days_left < 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRED {{ item.days_left|abs }} days ago!</span>
+                        {% elif item.days_left == 0 %}
+                            <span style="color: #ffcdd2; font-weight: bold; margin-left: 10px;">🔴 EXPIRES TODAY!</span>
+                        {% elif item.days_left <= 3 %}
+                            <span style="color: #ffe082; font-weight: bold; margin-left: 10px;">⚠️ Expires in {{ item.days_left }} days</span>
+                        {% else %}
+                            <span style="color: #c8e6c9; margin-left: 10px;">✓ {{ item.days_left }} days left</span>
+                        {% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+        
+    {% else %}
+        <p style="color: rgba(255, 255, 255, 0.7); text-align: center; padding: 40px;">
+            <em>No items in your fridge yet. Add your first item above!</em>
+        </p>
+    {% endif %}
+</div>
+
+    <div style="
+        /* The core Glassmorphism properties: transparency and blur */
+        background: rgba(255, 255, 255, 0.15); /* Semi-transparent white */
+        backdrop-filter: blur(10px); /* The frosted glass effect */
+        -webkit-backdrop-filter: blur(10px); /* For Safari support */
+        
+        /* Standard modern card properties */
+        border-radius: 16px;
+        padding: 30px;
+        margin-bottom: 20px;
+        
+        /* Subtle border for definition and light shadow for depth */
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        
+        /* Text color for contrast */
+        color: #f0f0f0; /* Light text for dark backgrounds */
+    ">
+        <h3 style="margin-top: 0; margin-bottom: 25px; font-size: 1.75rem; font-weight: 700; color: #ffffff;">📊 Category Breakdown</h3>
+        {% set fruit_count = items|selectattr('category', 'eq', 'Fruit')|list|length %}
+        {% set vegetable_count = items|selectattr('category', 'eq', 'Vegetable')|list|length %}
+        {% set dairy_count = items|selectattr('category', 'eq', 'Dairy')|list|length %}
+        {% set meat_count = items|selectattr('category', 'eq', 'Meat')|list|length %}
+        {% set other_count = items|selectattr('category', 'eq', 'Other')|list|length %}
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 12px; font-size: 1.1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 5px;">**Fruit**: {{ fruit_count }} items</li>
+            <li style="margin-bottom: 12px; font-size: 1.1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 5px;">**Vegetable**: {{ vegetable_count }} items</li>
+            <li style="margin-bottom: 12px; font-size: 1.1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 5px;">**Dairy**: {{ dairy_count }} items</li>
+            <li style="margin-bottom: 12px; font-size: 1.1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 5px;">**Meat**: {{ meat_count }} items</li>
+            <li style="margin-bottom: 0; font-size: 1.1rem;">**Other**: {{ other_count }} items</li>
+        </ul>
+    </div>
+
+</div>
+</body>
+</html>

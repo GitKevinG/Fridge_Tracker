@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title> ➕ Bulk Add Items - Fridge Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="nav-bar">
+            <a href="{{ url_for('home') }}" class="nav-link">🍎 Fridge</a>
+            <a href="{{ url_for('shopping_list') }}" class="nav-link">🛒 Shopping List</a>
+            <a href="{{ url_for('recipes') }}" class="nav-link">🍳 Recipes</a>
+            <a href="{{ url_for('price_history') }}" class="nav-link">📊 Price History</a>
+            <a href="{{ url_for('bulk_add') }}" class="nav-link">➕ Bulk Add</a>
+            <a href="{{ url_for('about') }}" class="nav-link">ℹ️ About</a>
+        </div>
+
+        <h1>➕ Bulk Add Items</h1>
+        <p style="color: whitesmoke; margin-bottom: 20px;">Add multiple items at once. Leave rows blank to skip them.</p>
+
+        <form method="POST" id="bulkForm">
+            <!-- Header Row -->
+            <div class="item-row header">
+                <div>Item Name *</div>
+                <div>Qty</div>
+                <div>Category</div>
+                <div>Store</div>
+                <div>Price</div>
+                <div>Expiration</div>
+                <div>Location</div>
+                <div></div>
+            </div>
+
+            <!-- Item Rows Container -->
+            <div id="itemRows">
+                <!-- Initial 5 rows -->
+                <div class="item-row" data-index="0">
+                    <div class="form-field">
+                        <input type="text" name="item_name_0" placeholder="e.g., Milk">
+                    </div>
+                    <div class="form-field">
+                        <input type="number" name="quantity_0" value="1" min="1">
+                    </div>
+                    <div class="form-field">
+                        <select name="category_0">
+                            <option value="Fruit">Fruit</option>
+                            <option value="Vegetable">Vegetable</option>
+                            <option value="Dairy" selected>Dairy</option>
+                            <option value="Meat">Meat</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <select name="store_0">
+                            <option value="">Not specified</option>
+                            <option value="Giant" selected>Giant</option>
+                            <option value="Aldi">Aldi</option>
+                            <option value="Walmart">Walmart</option>
+                            <option value="Target">Target</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <input type="number" step="0.01" name="price_0" placeholder="4.99">
+                    </div>
+                    <div class="form-field">
+                        <input type="date" name="expiration_0" value="{{ default_expiration }}">
+                    </div>
+                    <div class="form-field">
+                        <select name="location_0">
+                            <option value="Fridge" selected>Fridge</option>
+                            <option value="Freezer">Freezer</option>
+                            <option value="Pantry">Pantry</option>
+                            <option value="Bathroom">Bathroom</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="button" class="delete-btn" onclick="deleteRow(this)">🗑️</button>
+                    </div>
+                </div>
+            </div>
+
+            <input type="hidden" name="item_count" id="itemCount" value="1">
+
+            <div class="button-container">
+                <button type="button" class="add-row-btn" onclick="addRow()">+ Add Another Row</button>
+                <button type="submit" class="submit-btn">✓ Submit All Items</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        let rowIndex = 1;
+
+        function addRow() {
+            const container = document.getElementById('itemRows');
+            const newRow = document.createElement('div');
+            newRow.className = 'item-row';
+            newRow.setAttribute('data-index', rowIndex);
+            
+            newRow.innerHTML = `
+                <div class="form-field">
+                    <input type="text" name="item_name_${rowIndex}" placeholder="e.g., Eggs">
+                </div>
+                <div class="form-field">
+                    <input type="number" name="quantity_${rowIndex}" value="1" min="1">
+                </div>
+                <div class="form-field">
+                    <select name="category_${rowIndex}">
+                        <option value="Fruit">Fruit</option>
+                        <option value="Vegetable">Vegetable</option>
+                        <option value="Dairy" selected>Dairy</option>
+                        <option value="Meat">Meat</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <select name="store_${rowIndex}">
+                        <option value="">Not specified</option>
+                        <option value="Giant" selected>Giant</option>
+                        <option value="Aldi">Aldi</option>
+                        <option value="Walmart">Walmart</option>
+                        <option value="Target">Target</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <input type="number" step="0.01" name="price_${rowIndex}" placeholder="6.99">
+                </div>
+                <div class="form-field">
+                    <input type="date" name="expiration_${rowIndex}" value="{{ default_expiration }}">
+                </div>
+                <div class="form-field">
+                    <select name="location_${rowIndex}">
+                        <option value="Fridge" selected>Fridge</option>
+                        <option value="Freezer">Freezer</option>
+                        <option value="Pantry">Pantry</option>
+                        <option value="Bathroom">Bathroom</option>
+                    </select>
+                </div>
+                <div>
+                    <button type="button" class="delete-btn" onclick="deleteRow(this)">🗑️</button>
+                </div>
+            `;
+            
+            container.appendChild(newRow);
+            rowIndex++;
+            updateItemCount();
+        }
+
+        function deleteRow(button) {
+            const row = button.closest('.item-row');
+            row.remove();
+            updateItemCount();
+        }
+
+        function updateItemCount() {
+            const rows = document.querySelectorAll('#itemRows .item-row');
+            document.getElementById('itemCount').value = rowIndex;
+        }
+
+        // Add 4 more rows on page load (total of 5 to start)
+        window.onload = function() {
+            for (let i = 0; i < 4; i++) {
+                addRow();
+            }
+        };
+    </script>
+</body>
+</html>

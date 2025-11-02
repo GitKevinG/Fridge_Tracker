@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title> Shopping List - Fridge Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="nav-bar">
+            <a href="{{ url_for('home') }}" class="nav-link">🍎 Fridge</a>
+            <a href="{{ url_for('shopping_list') }}" class="nav-link">🛒 Shopping List</a>
+            <a href="{{ url_for('recipes') }}" class="nav-link">🍳 Recipes</a>
+            <a href="{{ url_for('price_history') }}" class="nav-link">📊 Price History</a>
+            <a href="{{ url_for('bulk_add') }}" class="nav-link">➕ Bulk Add</a>
+            <a href="{{ url_for('about') }}" class="nav-link">ℹ️ About</a>
+        </div>
+
+        <div class="nav-links">
+            <a href="{{ url_for('home') }}">← Back to Fridge</a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div style="background-color: #d4edda; color: #155724; padding: 15px; 
+                            border-radius: 5px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <h1>🛒 Shopping List</h1>
+
+        <!-- Store Comparison -->
+        {% if items %}
+            {% set giant_items = items|selectattr('store', 'eq', 'Giant')|selectattr('price')|list %}
+            {% set aldi_items = items|selectattr('store', 'eq', 'Aldi')|selectattr('price')|list %}
+            
+            {% if giant_items or aldi_items %}
+            <div class="glass-card" style="background-color: rgba(255, 243, 205, 0.2); border-left: 4px solid rgba(255, 152, 0, 0.8);">
+                <h3 style="margin-top: 0; color: white;">🏪 Store Comparison</h3>
+                
+                <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <!-- Giant Card -->
+                    {% if giant_items %}
+                    <div style="flex: 1; min-width: 200px; background-color: rgba(255, 255, 255, 0.15); padding: 15px; border-radius: 10px; backdrop-filter: blur(10px);">
+                        <div style="font-size: 18px; font-weight: bold; color: #90caf9;">Giant (DoorDash)</div>
+                        <div style="font-size: 24px; font-weight: bold; margin: 10px 0; color: white;">
+                            ${{ "%.2f"|format(giant_items|sum(attribute='price')) }}
+                        </div>
+                        <small style="color: rgba(255, 255, 255, 0.8);">{{ giant_items|length }} items with prices</small>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Aldi Card -->
+                    {% if aldi_items %}
+                    <div style="flex: 1; min-width: 200px; background-color: rgba(255, 255, 255, 0.15); padding: 15px; border-radius: 10px; backdrop-filter: blur(10px);">
+                        <div style="font-size: 18px; font-weight: bold; color: #ffb74d;">Aldi (DoorDash)</div>
+                        <div style="font-size: 24px; font-weight: bold; margin: 10px 0; color: white;">
+                            ${{ "%.2f"|format(aldi_items|sum(attribute='price')) }}
+                        </div>
+                        <small style="color: rgba(255, 255, 255, 0.8);">{{ aldi_items|length }} items with prices</small>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Show savings if both stores have items -->
+                {% if giant_items and aldi_items %}
+                    {% set giant_total = giant_items|sum(attribute='price') %}
+                    {% set aldi_total = aldi_items|sum(attribute='price') %}
+                    {% if giant_total > aldi_total %}
+                        <div style="background-color: rgba(232, 245, 233, 0.3); padding: 10px; border-radius: 8px; backdrop-filter: blur(10px);">
+                            <span style="color: white;">💰 Aldi appears cheaper! Estimated savings: ${{ "%.2f"|format(giant_total - aldi_total) }}</span>
+                        </div>
+                    {% elif aldi_total > giant_total %}
+                        <div style="background-color: rgba(232, 245, 233, 0.3); padding: 10px; border-radius: 8px; backdrop-filter: blur(10px);">
+                            <span style="color: white;">💰 Giant appears cheaper! Estimated savings: ${{ "%.2f"|format(aldi_total - giant_total) }}</span>
+                        </div>
+                    {% else %}
+                        <div style="background-color: rgba(227, 242, 253, 0.3); padding: 10px; border-radius: 8px; backdrop-filter: blur(10px);">
+                            <span style="color: white;">📊 Prices are about the same at both stores</span>
+                        </div>
+                    {% endif %}
+                {% endif %}
+                
+                <div style="margin-top: 10px;">
+                    <small style="color: rgba(255, 255, 255, 0.8);">
+                        ⚠️ Note: Prices based on when items were last added. Actual prices may vary.
+                    </small>
+                </div>
+            </div>
+            {% endif %}
+        {% endif %}
+
+        <!-- Shopping List Items -->
+            {% if items %}
+                <!-- Calculate total -->
+                {% set items_with_prices = items|selectattr('price')|list %}
+                {% set total_price = items_with_prices|sum(attribute='price')|default(0) %}
+                
+                <p style="color: white;">You need to buy {{ items|length }} item(s)</p>
+                
+                <!-- Show total if any items have prices -->
+                {% if items_with_prices %}
+                <div style="background-color: rgba(232, 245, 233, 0.3); padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid rgba(76, 175, 80, 0.8); backdrop-filter: blur(10px);">
+                    <strong style="color: white;">💰 Estimated Total: ${{ "%.2f"|format(total_price) }}</strong>
+                    <br>
+                    <small style="color: rgba(255, 255, 255, 0.9);">(Based on {{ items_with_prices|length }} items with prices)</small>
+                </div>
+                {% endif %}
+                
+                <!-- Each item as separate card -->
+                {% for item in items %}
+                <div class="item">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <strong>{{ item.quantity }}x {{ item.name }}</strong>
+                            <span style="color: rgba(255, 255, 255, 0.8);">({{ item.category }})</span>
+                            
+                            <!-- Show price per item -->
+                            {% if item.price %}
+                                <br>
+                                <small style="color: #c8e6c9; font-weight: bold;">
+                                    💰 ${{ "%.2f"|format(item.price) }} each
+                                    {% if item.quantity > 1 %}
+                                        = ${{ "%.2f"|format(item.price * item.quantity) }} total
+                                    {% endif %}
+                                </small>
+                            {% endif %}
+                            
+                            <!-- Show store -->
+                            {% if item.store %}
+                                <br>
+                                <small style="color: rgba(255, 255, 255, 0.8);">🏪 From: {{ item.store }}</small>
+                            {% endif %}
+                        </div>
+                        
+                        <div style="white-space: nowrap; display: flex; gap: 5px;">
+                            <!-- Edit button -->
+                            <a href="{{ url_for('edit_item', item_id=item.id) }}" style="text-decoration: none;">
+                                <button type="button" style="background: rgba(33, 150, 243, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    ✏️ Edit
+                                </button>
+                            </a>
+                            
+                            <!-- Purchased button -->
+                            <form method="POST" action="{{ url_for('mark_purchased', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(76, 175, 80, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    ✓ Purchased
+                                </button>
+                            </form>
+                            
+                            <!-- Delete button -->
+                            <form method="POST" action="{{ url_for('delete_item', item_id=item.id) }}" style="display: inline; margin: 0;">
+                                <button type="submit" style="background: rgba(244, 67, 54, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; font-size: 12px; border-radius: 8px;">
+                                    🗑️ Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <small style="color: rgba(255, 255, 255, 0.9);">📍 Was in: {{ item.location }}</small>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: rgba(255, 255, 255, 0.7); text-align: center; padding: 40px;">
+                    <em>Your shopping list is empty! Items you move from your fridge will appear here.</em>
+                </p>
+            {% endif %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>About Section</title>
+<head>
+    <title>Page Title - Fridge Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+</head>
+<body>
+    <div class="container">
+
+    <div class="nav-bar">
+        <a href="{{ url_for('home') }}" class="nav-link">🍎 Fridge</a>
+        <a href="{{ url_for('shopping_list') }}" class="nav-link">🛒 Shopping List</a>
+        <a href="{{ url_for('about') }}" class="nav-link">ℹ️ About</a>
+        <a href="{{ url_for('recipes') }}" class="nav-link">🍳 Recipes</a>
+            <a href="{{ url_for('bulk_add') }}" class="nav-link">➕ Bulk Add</a>
+        <a href="{{ url_for('price_history') }}" class="nav-link">📊 Price History</a>
+        
+    </div>
+        <h1> About Section</h1>
+        <p>This is the first project in the attempt to learn devops via project that involve my interest this one is about eating and making sure food is eaten prior to experation.</p>
+    </div>
+</body>
+</html>
