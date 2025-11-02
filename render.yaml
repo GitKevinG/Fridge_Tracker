@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: fridge-tracker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SPOONACULAR_API_KEY
+        sync: false
+    autoDeploy: true
+
+databases:
+  - name: fridge-tracker-db
+    plan: free
