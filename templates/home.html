@@ -35,6 +35,69 @@
             </a>
         </div>
 
+        <div class="glass-card" style="margin-bottom: 30px;">
+            <h2 style="color: white; margin-bottom: 20px;">➕ Add New Item</h2>
+            <form method="POST" action="{{ url_for('add_item') }}">
+                <!-- Your form fields -->
+                             <div class="form-group">
+                <label for="item_name">Item Name:</label>
+                <input type="text" id="item_name" name="item_name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="quantity">Quantity</label>
+                <input type="number" name="quantity" id="quantity" required>
+            </div>
+            
+            
+            <div class="form-group">
+                <label for="category">Category:</label>
+                <select id="category" name="category">
+                    <option value="Fruit">Fruit</option>
+                    <option value="Vegetable">Vegetable</option>
+                    <option value="Dairy">Dairy</option>
+                    <option value="Meat">Meat</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="expiration_date">Expiration Date:</label>
+                <input type="date" id="expiration_date" name="expiration_date" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="location">Location:</label>
+                <select id="location" name="location">
+                    <option value="Fridge">Fridge</option>
+                    <option value="Freezer">Freezer</option>
+                    <option value="Pantry">Pantry</option>
+                    <option value="Bathroom">Bathroom</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="store">Store (optional):</label>
+                <select id="store" name="store">
+                    <option value="">Not specified</option>
+                    <option value="Giant">Giant (DoorDash)</option>
+                    <option value="Aldi">Aldi (DoorDash)</option>
+                    <option value="Walmart">Walmart</option>
+                    <option value="Target">Target</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <!-- NEW: Price field -->
+            <div class="form-group">
+                <label for="price">Price (optional):</label>
+                <input type="number" step="0.01" id="price" name="price" placeholder="4.99">
+            </div>
+                
+                <button type="submit">Add Item</button>
+            </form>
+        </div>
+
 
                 <!-- Expiring Soon Section -->
         {% set expiring_soon = items|selectattr('days_left', 'le', 3)|list %}
