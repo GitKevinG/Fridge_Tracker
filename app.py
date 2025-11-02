@@ -95,48 +95,95 @@ def init_db():
 def migrate_db():
     """Add status column if it doesn't exist"""
     conn = get_db_connection()
+    
     try:
-        # Check if status column exists
-        cursor = conn.execute("PRAGMA table_info(fridge_items)")
-        columns = [column[1] for column in cursor.fetchall()]
-        
-        if 'status' not in columns:
-            # Add the status column with default value 'fridge'
-            conn.execute("ALTER TABLE fridge_items ADD COLUMN status TEXT DEFAULT 'fridge'")
-            conn.commit()
-            print("Database migrated: added status column")
-
-        if 'price' not in columns:
-            # Add the price column 
-            conn.execute("ALTER TABLE fridge_items ADD COLUMN price REAL")
-            conn.commit()
-            print("Database migration: added price column")
-
-        if 'store' not in columns:
-            # Adds to stores colum
-            conn.execute("ALTER TABLE fridge_items ADD COLUMN store TEXT")
-            conn.commit()
-            print("Database migrated: added store column")
-
+        if DATABASE_URL:
+            # PostgreSQL - use cursor
+            cursor = conn.cursor()
+            
+            # Check if columns exist
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='fridge_items'
+            """)
+            columns = [row[0] for row in cursor.fetchall()]
+            
+            if 'status' not in columns:
+                cursor.execute("ALTER TABLE fridge_items ADD COLUMN status TEXT DEFAULT 'fridge'")
+                conn.commit()
+                print("Database migrated: added status column")
+            
+            if 'price' not in columns:
+                cursor.execute("ALTER TABLE fridge_items ADD COLUMN price REAL")
+                conn.commit()
+                print("Database migrated: added price column")
+            
+            if 'store' not in columns:
+                cursor.execute("ALTER TABLE fridge_items ADD COLUMN store TEXT")
+                conn.commit()
+                print("Database migrated: added store column")
+            
+            cursor.close()
+            
+        else:
+            # SQLite - use conn.execute
+            cursor = conn.execute("PRAGMA table_info(fridge_items)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'status' not in columns:
+                conn.execute("ALTER TABLE fridge_items ADD COLUMN status TEXT DEFAULT 'fridge'")
+                conn.commit()
+                print("Database migrated: added status column")
+            
+            if 'price' not in columns:
+                conn.execute("ALTER TABLE fridge_items ADD COLUMN price REAL")
+                conn.commit()
+                print("Database migrated: added price column")
+            
+            if 'store' not in columns:
+                conn.execute("ALTER TABLE fridge_items ADD COLUMN store TEXT")
+                conn.commit()
+                print("Database migrated: added store column")
+                
     finally:
         conn.close()
 
 def init_price_history_table():
-    #Create price_history table if it doesn't exist"""
+    """Create price_history table if it doesn't exist"""
     conn = get_db_connection()
+    
     try:
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS price_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                item_name TEXT NOT NULL,
-                store TEXT,
-                price REAL NOT NULL,
-                date_recorded TEXT NOT NULL,
-                notes TEXT
-            )
-        ''')
-        conn.commit()
-        print("Price history table initialized")
+        if DATABASE_URL:
+            # PostgreSQL
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS price_history (
+                    id SERIAL PRIMARY KEY,
+                    item_name TEXT NOT NULL,
+                    store TEXT,
+                    price REAL NOT NULL,
+                    date_recorded TEXT NOT NULL,
+                    notes TEXT
+                )
+            ''')
+            conn.commit()
+            cursor.close()
+            print("Price history table initialized")
+        else:
+            # SQLite
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS price_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    item_name TEXT NOT NULL,
+                    store TEXT,
+                    price REAL NOT NULL,
+                    date_recorded TEXT NOT NULL,
+                    notes TEXT
+                )
+            ''')
+            conn.commit()
+            print("Price history table initialized")
     finally:
         conn.close()
 
